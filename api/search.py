@@ -1,25 +1,41 @@
+import logging
 from fastapi import APIRouter, HTTPException
-from typing import List, Dict
-from .utils import parse_query, filter_metadata, search_in_pinecone
-from .models import QueryResponse
+from pydantic import BaseModel
+from typing import List
+from api.utils import perform_search
+from api.response_generator import generate_response
 
 router = APIRouter()
 
-@router.post("/search", response_model=QueryResponse)
-async def search(query: str):
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+class SearchRequest(BaseModel):
+    query: str
+
+class SearchResponse(BaseModel):
+    query: str
+    response: str
+    sources: List[str]
+
+@router.post("/search", response_model=SearchResponse)
+def search(request: SearchRequest):
+    query = request.query
     try:
-        # Step 1: Parse the query to extract keywords, context, and metrics
-        parsed_query = parse_query(query)
+        logger.info(f"Received query: {query}")
         
-        # Step 2: Perform semantic search using Pinecone
-        semantic_results = search_in_pinecone(parsed_query["embedding"])
+        # Perform the search to get context
+        context, sources = perform_search(query)
+        logger.info(f"Search context: {context}")
+        logger.info(f"Search sources: {sources}")
         
-        # Step 3: Apply keyword matching and metadata filters
-        filtered_results = filter_metadata(semantic_results, parsed_query)
+        # Generate the response using GPT-4 Turbo
+        response = generate_response(query, context)
+        logger.info(f"Generated response: {response}")
         
-        # Step 4: Return the search results
-        return QueryResponse(results=filtered_results)
-    
+        return SearchResponse(query=query, response=response, sources=sources)
     except Exception as e:
+        logger.error(f"Error processing query: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 

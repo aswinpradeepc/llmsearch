@@ -1,3 +1,6 @@
 readme.txt 
 /media/*
 env/
+.env
+*__pycache__/*
+*.pyc

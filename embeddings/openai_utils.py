@@ -1,7 +1,13 @@
 import openai
+import os
+from typing import List
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Initialize OpenAI API key
-openai.api_key = 'your-openai-api-key'
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 def generate_embeddings(text: str) -> List[float]:
     """
@@ -15,6 +21,6 @@ def generate_embeddings(text: str) -> List[float]:
     """
     response = openai.Embedding.create(
         model="text-embedding-ada-002", 
-        input=text
+        input=[text]  # The new API expects a list of inputs
     )
     return response['data'][0]['embedding']

@@ -1,6 +1,6 @@
 from typing import List, Dict
 import openai
-from .embeddings.query_processor import generate_query_embedding
+from embeddings.query_processor import generate_query_embedding
 
 # Function to parse incoming query and extract useful context
 def parse_query(query: str) -> Dict:
@@ -50,3 +50,16 @@ def match_filters(result: Dict, filters: Dict) -> bool:
         if key in result and result[key] != value:
             return False
     return True
+
+# Function to perform the complete search process
+def perform_search(query: str) -> (List[str], List[str]):
+    parsed_query = parse_query(query)
+    embedding = parsed_query["embedding"]
+    results = search_in_pinecone(embedding)
+    filtered_results = filter_metadata(results, parsed_query)
+    
+    # Extract context and sources from filtered results
+    context = [result["text"] for result in filtered_results]
+    sources = [result["source"] for result in filtered_results]
+    
+    return context, sources
