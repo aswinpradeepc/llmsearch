@@ -4,8 +4,8 @@ import fitz  # PyMuPDF
 import pdfplumber
 
 # Path to the documents folder
-pdf_folder_path = '/media/documents'
-output_folder_path = '/media/processed_data'
+pdf_folder_path = 'media/documents'
+output_folder_path = 'media/processed_data'
 
 # Create output folder if it doesn't exist
 if not os.path.exists(output_folder_path):
