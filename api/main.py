@@ -29,7 +29,7 @@ class SearchQuery(BaseModel):
 
 class Metadata(BaseModel):
     filename: str
-    content: Optional[str] = None
+    content: str  # Make content required, not optional
 
 class Match(BaseModel):
     id: str
@@ -73,13 +73,17 @@ def format_matches(results: Dict[str, Any]) -> List[Match]:
     return matches
 
 def get_rag_response(query: str, context: List[str]) -> str:
-    """Generate RAG response using OpenAI."""
     try:
-        prompt = f"""Based on the following context, answer the question. 
+        # Join contexts with proper truncation
+        combined_context = " ".join(context)
+        if len(combined_context) > 15000:
+            combined_context = combined_context[:15000] + "..."
+
+        prompt = f"""Based on the following context, answer the question.
         If the answer cannot be found in the context, say "I cannot answer this based on the available information."
         
         Context:
-        {' '.join(context)}
+        {combined_context}
         
         Question: {query}
         

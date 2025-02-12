@@ -23,16 +23,26 @@ EMBEDDING_MODEL = "text-embedding-ada-002"
 INDEX_NAME = "financial-search-index"
 DATA_DIR = "/home/aswin/geojit/llmsearch/media/processed_data"
 
+def truncate_text(text: str, max_chars: int = 15000) -> str:
+    """Truncate text to stay within Pinecone metadata limits."""
+    if not text:
+        return ""
+    return text[:max_chars] + ("..." if len(text) > max_chars else "")
+
 def load_document(filepath: str) -> Dict:
     """Load a single JSON document."""
     try:
         with open(filepath, 'r') as f:
             data = json.load(f)
+            content = data.get('text', '')  # Get text from JSON
+            # Truncate content to stay within metadata limits
+            truncated_content = truncate_text(content)
             return {
                 'id': os.path.splitext(os.path.basename(filepath))[0],
-                'content': data.get('text', ''),
+                'content': truncated_content,
                 'metadata': {
-                    'filename': data.get('filename', '')
+                    'filename': data.get('filename', ''),
+                    'content': truncated_content  # Include content in metadata
                 }
             }
     except Exception as e:
@@ -46,9 +56,11 @@ def generate_embedding(text: str) -> List[float]:
         if not isinstance(text, str) or not text.strip():
             return None
             
+        # Truncate text to OpenAI's limit
+        truncated_text = text[:8192].replace("\n", " ")
         response = client.embeddings.create(
             model=EMBEDDING_MODEL,
-            input=text.replace("\n", " ")[:8192]  # Truncate to model limit
+            input=truncated_text
         )
         return response.data[0].embedding
     except Exception as e:
@@ -98,7 +110,10 @@ def main():
                 vector = {
                     'id': doc['id'],
                     'values': embedding,
-                    'metadata': doc['metadata']
+                    'metadata': {
+                        'filename': doc['metadata']['filename'],
+                        'content': doc['content']  # Ensure content is in metadata
+                    }
                 }
                 batch.append(vector)
                 

@@ -16,11 +16,11 @@ query = st.text_input("Enter your query:")
 if st.button("Search"):
     if query:
         # Call the API with the user query
-        response = requests.post("http://localhost:8000/api/search", json={"query": query})
+        response = requests.post("http://localhost:8000/rag", json={"query": query})
         
         if response.status_code == 200:
             data = response.json()
-            display_response(data["response"], data["sources"])
+            display_response(data["answer"], data["sources"])
         else:
             st.error("Error: Unable to retrieve data. Please try again later.")
     else:

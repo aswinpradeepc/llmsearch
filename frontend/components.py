@@ -12,4 +12,5 @@ def display_response(response: str, sources: list):
     
     st.write("### Sources")
     for source in sources:
-        st.write(f"- {source}")
+        st.write(f"- **Filename**: {source['metadata']['filename']}")
+        st.write(f"  **Content**: {source['metadata']['content'][:200]}...")  # Display first 200 chars
