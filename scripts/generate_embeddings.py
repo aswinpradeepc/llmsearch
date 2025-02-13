@@ -22,12 +22,21 @@ BATCH_SIZE = 100
 EMBEDDING_MODEL = "text-embedding-ada-002"
 INDEX_NAME = "financial-search-index"
 DATA_DIR = "/home/aswin/geojit/llmsearch/media/processed_data"
+CHUNK_SIZE = 8192  # OpenAI's limit for text input
 
-def truncate_text(text: str, max_chars: int = 15000) -> str:
-    """Truncate text to stay within Pinecone metadata limits."""
-    if not text:
-        return ""
-    return text[:max_chars] + ("..." if len(text) > max_chars else "")
+def chunk_text(text: str, chunk_size: int = CHUNK_SIZE) -> List[str]:
+    """Split text into chunks of specified size."""
+    return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
+
+def flatten_list(nested_list: List) -> str:
+    """Flatten a nested list into a single string."""
+    flat_list = []
+    for item in nested_list:
+        if isinstance(item, list):
+            flat_list.append(flatten_list(item))
+        else:
+            flat_list.append(str(item))
+    return " ".join(flat_list)
 
 def load_document(filepath: str) -> Dict:
     """Load a single JSON document."""
@@ -35,14 +44,17 @@ def load_document(filepath: str) -> Dict:
         with open(filepath, 'r') as f:
             data = json.load(f)
             content = data.get('text', '')  # Get text from JSON
-            # Truncate content to stay within metadata limits
-            truncated_content = truncate_text(content)
+            tables = data.get('tables', [])  # Get tables from JSON
+            # Concatenate text and tables for embedding
+            tables_text = flatten_list(tables)
+            full_content = content + " " + tables_text
             return {
                 'id': os.path.splitext(os.path.basename(filepath))[0],
-                'content': truncated_content,
+                'content': full_content,
                 'metadata': {
                     'filename': data.get('filename', ''),
-                    'content': truncated_content  # Include content in metadata
+                    'content': content,  # Include original content in metadata
+                    'tables': tables_text  # Flatten tables for metadata
                 }
             }
     except Exception as e:
@@ -52,15 +64,9 @@ def load_document(filepath: str) -> Dict:
 def generate_embedding(text: str) -> List[float]:
     """Generate embedding using OpenAI API."""
     try:
-        # Ensure text is not empty and is a string
-        if not isinstance(text, str) or not text.strip():
-            return None
-            
-        # Truncate text to OpenAI's limit
-        truncated_text = text[:8192].replace("\n", " ")
         response = client.embeddings.create(
             model=EMBEDDING_MODEL,
-            input=truncated_text
+            input=text
         )
         return response.data[0].embedding
     except Exception as e:
@@ -105,22 +111,27 @@ def main():
         # Generate and store embeddings in batches
         batch = []
         for i, doc in enumerate(documents, 1):
-            embedding = generate_embedding(doc['content'])
-            if embedding:
-                vector = {
-                    'id': doc['id'],
-                    'values': embedding,
-                    'metadata': {
-                        'filename': doc['metadata']['filename'],
-                        'content': doc['content']  # Ensure content is in metadata
+            chunks = chunk_text(doc['content'])
+            for j, chunk in enumerate(chunks):
+                embedding = generate_embedding(chunk)
+                if embedding:
+                    vector = {
+                        'id': f"{doc['id']}_chunk_{j}",
+                        'values': embedding,
+                        'metadata': {
+                            'filename': doc['metadata']['filename'],
+                            'chunk_index': j,
+                            'total_chunks': len(chunks),
+                            'content': chunk if chunk else " ",  # Include chunk content in metadata
+                            'tables': doc['metadata']['tables']  # Flatten tables for metadata
+                        }
                     }
-                }
-                batch.append(vector)
-                
-                if len(batch) >= BATCH_SIZE:
-                    index.upsert(vectors=batch)
-                    logger.info(f"Processed {i}/{len(documents)} documents")
-                    batch = []
+                    batch.append(vector)
+                    
+                    if len(batch) >= BATCH_SIZE:
+                        index.upsert(vectors=batch)
+                        logger.info(f"Processed {i}/{len(documents)} documents, chunk {j+1}/{len(chunks)}")
+                        batch = []
         
         # Upload remaining vectors
         if batch:

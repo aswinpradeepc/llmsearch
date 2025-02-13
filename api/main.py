@@ -30,6 +30,9 @@ class SearchQuery(BaseModel):
 class Metadata(BaseModel):
     filename: str
     content: str  # Make content required, not optional
+    chunk_index: int
+    total_chunks: int
+    tables: str
 
 class Match(BaseModel):
     id: str
@@ -62,15 +65,19 @@ def generate_embedding(text: str) -> List[float]:
         raise HTTPException(status_code=500, detail="Error generating embedding")
 
 def format_matches(results: Dict[str, Any]) -> List[Match]:
-    """Format Pinecone results to match Pydantic model."""
     matches = []
     for match in results.get("matches", []):
+        metadata = match["metadata"]
+        # Ensure 'content' is present in metadata
+        if 'content' not in metadata:
+            metadata['content'] = ""  
         matches.append(Match(
             id=match["id"],
             score=match["score"],
-            metadata=Metadata(**match["metadata"])
+            metadata=Metadata(**metadata)
         ))
     return matches
+
 
 def get_rag_response(query: str, context: List[str]) -> str:
     try:
@@ -80,7 +87,7 @@ def get_rag_response(query: str, context: List[str]) -> str:
             combined_context = combined_context[:15000] + "..."
 
         prompt = f"""Based on the following context, answer the question.
-        If the answer cannot be found in the context, say "I cannot answer this based on the available information."
+        If the answer cannot be found in the context, say "I cannot answer this based on the available information." and explain why.
         
         Context:
         {combined_context}
@@ -90,7 +97,7 @@ def get_rag_response(query: str, context: List[str]) -> str:
         Answer:"""
 
         response = openai_client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
             max_tokens=500
