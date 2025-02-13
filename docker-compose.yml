@@ -1,0 +1,31 @@
+services:
+  api:
+    build: .
+    container_name: llmsearch-api
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - PINECONE_KEY=${PINECONE_KEY}
+    volumes:
+      - .:/app
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000
+    networks:
+      - llmsearch-network
+
+  frontend:
+    build: .
+    container_name: llmsearch-frontend
+    ports:
+      - "8501:8501"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - PINECONE_KEY=${PINECONE_KEY}
+    volumes:
+      - .:/app
+    command: streamlit run frontend/app.py --server.port 8501 --server.address 0.0.0.0
+    networks:
+      - llmsearch-network
+networks:
+  llmsearch-network:
+    driver: bridge
